@@ -1,17 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Play, Square, Upload, Activity, Clock, Plus, Trash2, TrendingUp, Zap, RotateCcw, FolderOpen, Save, Check, X, Sparkles, Cpu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-// Import booster assets
-import booster1 from './assets/booster_1.png';
-import booster2 from './assets/booster_2.png';
-import booster3 from './assets/booster_3.png';
-import emission1 from './assets/emission_1.png';
-import emission2 from './assets/emission_2.png';
-import emission3 from './assets/emission_3.png';
-import emission4 from './assets/emission_4.png';
-import emission5 from './assets/emission_5.png';
-import emission6 from './assets/emission_6.png';
+import { QuantumSigilCanvas } from './QuantumSigil';
+import { buildBoosterLabels, hashSessionText } from './sessionBoosterCopy';
 
 interface RadionicItem {
   id: string;
@@ -30,6 +21,7 @@ interface SavedSession {
   isOverdrive: boolean;
   isQuantumAudio: boolean;
   realization: number;
+  resonance?: number;
 }
 
 interface SubSession {
@@ -37,7 +29,8 @@ interface SubSession {
   title: string;
   witness: string;
   trend: string;
-  image: string;
+  /** Unique seed for the live fractal sigil tied to this booster instance */
+  sigilSeed: number;
   realization: number;
   isActive: boolean;
   x: number;
@@ -76,7 +69,8 @@ const compressImage = (file: File, maxWidth: number = 600, quality: number = 0.7
 };
 
 export default function App() {
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isCurrentLoaded, setIsCurrentLoaded] = useState(false);
+  const [isSavedSessionsLoaded, setIsSavedSessionsLoaded] = useState(false);
   
   const [witnesses, setWitnesses] = useState<RadionicItem[]>([{ id: 'w1', image: null, text: '' }]);
   const [trends, setTrends] = useState<RadionicItem[]>([{ id: 't1', image: null, text: '' }]);
@@ -85,6 +79,12 @@ export default function App() {
   const [duration, setDuration] = useState<number>(15);
   
   const [isActive, setIsActive] = useState(false);
+  const [isQuantumLocked, setIsQuantumLocked] = useState(false);
+  const [isCharging, setIsCharging] = useState(false);
+  const chargeTimerRef = useRef<number | null>(null);
+  const [chargeProgress, setChargeProgress] = useState(0);
+
+  const [resonance, setResonance] = useState(0);
   const [isOverdrive, setIsOverdrive] = useState(false);
   const [isQuantumAudio, setIsQuantumAudio] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
@@ -115,11 +115,17 @@ export default function App() {
 
   const tickCounter = useRef<number>(0);
 
+  const sessionIntentHash = useMemo(
+    () => hashSessionText(witnesses, trends),
+    [witnesses, trends]
+  );
+
   useEffect(() => {
+    // Stage 1: Load current session
     try {
       const currentRaw = localStorage.getItem('cyber_shaman_current');
       if (currentRaw) {
-        const data = JSON.parse(currentRaw) as Partial<SavedSession>;
+        const data = JSON.parse(currentRaw);
         if (data.witnesses) setWitnesses(data.witnesses);
         if (data.trends) setTrends(data.trends);
         if (data.frequency !== undefined) setFrequency(data.frequency);
@@ -127,37 +133,48 @@ export default function App() {
         if (data.isOverdrive !== undefined) setIsOverdrive(data.isOverdrive);
         if (data.isQuantumAudio !== undefined) setIsQuantumAudio(data.isQuantumAudio);
         if (data.realization !== undefined) setRealization(data.realization);
-        const linked = (data as { linkedSavedSessionId?: string | null }).linkedSavedSessionId;
-        if (linked === null || linked === undefined) setLinkedSavedSessionId(null);
-        else if (typeof linked === 'string') setLinkedSavedSessionId(linked);
+        if (data.resonance !== undefined) setResonance(data.resonance);
+        if (data.isQuantumLocked !== undefined) setIsQuantumLocked(data.isQuantumLocked);
+        if (data.linkedSavedSessionId !== undefined) setLinkedSavedSessionId(data.linkedSavedSessionId);
       }
-      
+    } catch(e) { console.error('Error loading current session', e); }
+    setIsCurrentLoaded(true);
+
+    // Stage 2: Load saved sessions list
+    try {
       const savedRaw = localStorage.getItem('cyber_shaman_saved_sessions');
       if (savedRaw) {
-        setSavedSessions(JSON.parse(savedRaw));
+        const parsed = JSON.parse(savedRaw);
+        if (Array.isArray(parsed)) {
+          setSavedSessions(parsed);
+        }
       }
-    } catch(e) { console.error('Error loading session state', e); }
-    setIsInitialized(true);
+    } catch(e) { console.error('Error loading saved sessions', e); }
+    setIsSavedSessionsLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isSavedSessionsLoaded) return;
     setLinkedSavedSessionId(prev => {
       if (!prev) return prev;
       return savedSessions.some(s => s.id === prev) ? prev : null;
     });
-  }, [savedSessions, isInitialized]);
+  }, [savedSessions, isSavedSessionsLoaded]);
 
   useEffect(() => {
-    if (!isInitialized) return;
-    const sessionData = { witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, linkedSavedSessionId };
+    if (!isCurrentLoaded) return;
+    const sessionData = { 
+      witnesses, trends, frequency, duration, 
+      isOverdrive, isQuantumAudio, realization, 
+      linkedSavedSessionId, resonance, isQuantumLocked 
+    };
     localStorage.setItem('cyber_shaman_current', JSON.stringify(sessionData));
-  }, [witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, linkedSavedSessionId, isInitialized]);
+  }, [witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, linkedSavedSessionId, resonance, isQuantumLocked, isCurrentLoaded]);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isSavedSessionsLoaded) return;
     localStorage.setItem('cyber_shaman_saved_sessions', JSON.stringify(savedSessions));
-  }, [savedSessions, isInitialized]);
+  }, [savedSessions, isSavedSessionsLoaded]);
 
   const flashQuickSaveSuccess = () => {
     if (quickSaveSuccessTimerRef.current) clearTimeout(quickSaveSuccessTimerRef.current);
@@ -184,7 +201,8 @@ export default function App() {
       duration,
       isOverdrive,
       isQuantumAudio,
-      realization
+      realization,
+      resonance
     };
     setSavedSessions(prev => [newSession, ...prev]);
     setLinkedSavedSessionId(newSession.id);
@@ -207,7 +225,8 @@ export default function App() {
                 duration,
                 isOverdrive,
                 isQuantumAudio,
-                realization
+                realization,
+                resonance
               }
             : s
         )
@@ -231,6 +250,7 @@ export default function App() {
     setIsOverdrive(session.isOverdrive);
     setIsQuantumAudio(session.isQuantumAudio);
     setRealization(session.realization);
+    setResonance(session.resonance ?? 0);
     setLinkedSavedSessionId(session.id);
     setShowSessionModal(false);
   };
@@ -385,30 +405,43 @@ export default function App() {
         }
 
         const seedStr = witnesses.map(w => w.text).join('') + trends.map(t => t.text).join('');
-        let seed = 0;
+        let intentSeed = 0;
         for (let i = 0; i < seedStr.length; i++) {
-          seed = ((seed << 5) - seed) + seedStr.charCodeAt(i);
-          seed |= 0;
+          intentSeed = ((intentSeed << 5) - intentSeed) + seedStr.charCodeAt(i);
+          intentSeed |= 0;
         }
-        const mappedSeed = Math.abs(seed) % 256;
+        const targetValue = Math.abs(intentSeed) % 256;
         
-        const array = new Uint8Array(1);
-        window.crypto.getRandomValues(array);
-        const distance = Math.abs(array[0] - mappedSeed);
+        // Quantum Probability Field: Sample multiple points of entropy
+        const entropyBuffer = new Uint8Array(isOverdrive ? 10 : 3);
+        window.crypto.getRandomValues(entropyBuffer);
         
-        let delta = 0;
-        if (distance < 20) delta = 0.05;
-        else if (distance < 60) delta = 0.02;
-        else if (distance < 110) delta = 0.005;
-        else if (distance < 170) delta = -0.005; 
-        else delta = -0.02; 
+        let totalDistance = 0;
+        entropyBuffer.forEach(val => {
+          totalDistance += Math.abs(val - targetValue);
+        });
+        const avgDistance = totalDistance / entropyBuffer.length;
+        
+        // Coherence: 0 to 1, where 1 is perfect match
+        const coherence = Math.max(0, 1 - (avgDistance / 128));
+        
+        // Resonance logic: Sustained coherence builds resonance
+        setResonance(prev => {
+          const targetRes = coherence > 0.7 ? coherence * 1.5 : coherence * 0.5;
+          return prev * 0.95 + targetRes * 0.05; // Smooth transition
+        });
+
+        let delta = (coherence - 0.5) * 0.1; // Base delta centered at 0.5 coherence
+        
+        // Resonance Multiplier: High resonance significantly boosts growth
+        const resonanceBoost = Math.pow(resonance, 2.5) * 0.5;
+        delta += resonanceBoost;
 
         // Quantum Connection: Sub-sessions boost main realization with Entanglement Synergy
         const activeSubSessions = subSessions.filter(s => s.isActive);
         const activeCount = activeSubSessions.length;
-        // Synergy: More boosters = each booster is significantly more efficient
-        const synergyFactor = activeCount > 0 ? (1 + (activeCount * 0.3)) : 1;
-        const subBoostRaw = activeSubSessions.reduce((acc, s) => acc + (s.realization / 800), 0);
+        const synergyFactor = activeCount > 0 ? (1 + (activeCount * 0.4)) : 1;
+        const subBoostRaw = activeSubSessions.reduce((acc, s) => acc + (s.realization / 1200), 0);
         const subBoost = subBoostRaw * synergyFactor;
         delta += subBoost;
 
@@ -430,8 +463,8 @@ export default function App() {
 
         if (audioCtxRef.current && oscillatorRef.current && oscillator2Ref.current) {
           if (isQuantumAudio) {
-            const basePitch = (mappedSeed * 1.5) + 100;
-            const targetFreq = basePitch + (distance * 0.5);
+            const basePitch = (targetValue * 1.5) + 100;
+            const targetFreq = basePitch + (avgDistance * 0.5);
             const rampTime = audioCtxRef.current.currentTime + (tickRate / 1000);
             
             oscillatorRef.current.frequency.linearRampToValueAtTime(targetFreq, rampTime);
@@ -456,12 +489,50 @@ export default function App() {
       tickCounter.current = 0;
       setTimeRemaining(duration * 60);
       setIsActive(true);
+      setIsQuantumLocked(true);
+      setResonance(0.1);
       startAudio();
     } else {
       setIsActive(false);
+      setIsQuantumLocked(false);
+      setIsCharging(false);
+      setChargeProgress(0);
+      setResonance(0);
       stopAudio();
       tickCounter.current = 0;
     }
+  };
+
+  const startCharging = () => {
+    if (isActive) {
+      handleStart(); // Normal stop if already running
+      return;
+    }
+    setIsCharging(true);
+    setChargeProgress(0);
+    const start = Date.now();
+    const durationMs = 3000;
+
+    chargeTimerRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(100, (elapsed / durationMs) * 100);
+      setChargeProgress(progress);
+      
+      if (progress >= 100) {
+        if (chargeTimerRef.current) clearInterval(chargeTimerRef.current);
+        setIsCharging(false);
+        handleStart();
+      }
+    }, 50);
+  };
+
+  const cancelCharging = () => {
+    if (chargeTimerRef.current) {
+      clearInterval(chargeTimerRef.current);
+      chargeTimerRef.current = null;
+    }
+    setIsCharging(false);
+    setChargeProgress(0);
   };
 
   const handleResetRealization = () => {
@@ -469,30 +540,25 @@ export default function App() {
   };
 
   const summonAIAssistant = () => {
-    const templates = [
-      { title: 'Source Emission', witness: 'Torus Field', trend: 'Geometric Stabilization', image: emission1 },
-      { title: 'Spectral Relay', witness: 'Scalar Waves', trend: 'Frequency Coherence', image: emission2 },
-      { title: 'Manifestation Core', witness: 'Light Lattice', trend: 'Deep Realization', image: emission3 },
-      { title: 'Cosmic Entangler', witness: 'Golden Spiral', trend: 'Universal Link', image: emission4 },
-      { title: 'Bio-Resonator', witness: 'Photonic DNA', trend: 'Vitality Boost', image: emission5 },
-      { title: 'Plasma Uplink', witness: 'Charged Atmosphere', trend: 'Rapid Discharge', image: emission6 },
-      { title: 'Core Power Booster', witness: 'Quantum Singularity', trend: 'Hyper-Acceleration', image: booster1 },
-      { title: 'Aetheric Uplink', witness: 'Zero-Point Field', trend: 'Deep Resonance', image: booster2 },
-      { title: 'Reality Engine', witness: 'Causal Nexus', trend: 'Stabilized Manifestation', image: booster3 }
-    ];
-    
-    const template = templates[Math.floor(Math.random() * templates.length)];
     const id = `sub-${Date.now()}`;
-    
+    const sigilSeed =
+      (Math.imul(Date.now() | 0, 0xcc9e2d51) ^
+        (Math.floor(Math.random() * 0x7fffffff) * 0x1b873593)) >>>
+      0;
+    const labels = buildBoosterLabels(witnesses, trends, sigilSeed);
+
     const newSub: SubSession = {
       id,
-      ...template,
+      title: labels.title,
+      witness: labels.witness,
+      trend: labels.trend,
+      sigilSeed,
       realization: 0,
       isActive: true,
-      x: 100 + (Math.random() * 200),
-      y: 100 + (Math.random() * 200)
+      x: 100 + Math.random() * 200,
+      y: 100 + Math.random() * 200
     };
-    
+
     setSubSessions(prev => [...prev, newSub]);
   };
 
@@ -618,7 +684,7 @@ export default function App() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (!isInitialized) return null;
+   if (!isCurrentLoaded || !isSavedSessionsLoaded) return null;
 
   return (
     <div className="min-h-screen bg-[#050505] text-[#00ffcc] font-mono p-4 md:p-8 flex flex-col items-center">
@@ -872,12 +938,24 @@ export default function App() {
               </button>
             </div>
             <div className="p-3 flex flex-col gap-2">
-              <div className="h-28 bg-black/60 rounded overflow-hidden border border-[#00ffcc]/30 shadow-[inset_0_0_15px_rgba(0,255,204,0.3)]">
-                <img src={sub.image} className="w-full h-full object-cover opacity-90 hover:scale-110 transition-transform duration-1000" alt="Emission" />
+              <div className="relative h-28 bg-black/60 rounded overflow-hidden border border-[#00ffcc]/30 shadow-[inset_0_0_15px_rgba(0,255,204,0.3)]">
+                <QuantumSigilCanvas
+                  seed={(sub.sigilSeed ^ sessionIntentHash) >>> 0}
+                  frequency={frequency}
+                  realization={sub.realization}
+                  sessionActive={isActive}
+                  isQuantumAudio={isQuantumAudio}
+                />
+                <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 to-transparent pt-4 pb-1 px-2">
+                  <span className="text-[8px] uppercase tracking-[0.2em] text-[#00ffcc]/90 font-semibold">Sigilo vivo</span>
+                  <span className="block text-[7px] text-[#00ffcc]/50 font-mono mt-0.5">
+                    {frequency} Hz{isQuantumAudio ? ' · quantum' : ''}
+                  </span>
+                </div>
               </div>
               <div className="text-[10px] uppercase tracking-wide text-[#00ffcc]/80 space-y-0.5">
-                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Source:</span> <span className="text-[#00ffcc] font-bold">{sub.witness}</span></div>
-                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Emission:</span> <span className="text-cyan-400 font-bold">{sub.trend}</span></div>
+                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Target:</span> <span className="text-[#00ffcc] font-bold">{sub.witness}</span></div>
+                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Boost:</span> <span className="text-cyan-400 font-bold">{sub.trend}</span></div>
               </div>
               <div className="mt-2 flex flex-col gap-1">
                 <div className="flex justify-between text-[8px] text-[#00ffcc]/50 uppercase">
@@ -901,9 +979,9 @@ export default function App() {
         {/* Realization Bar */}
         <div className="w-full flex flex-col gap-2 border-b border-[#00ffcc]/20 pb-6 relative">
           {subSessions.filter(s => s.isActive).length > 0 && (
-            <div className="absolute -top-1 right-0 text-[10px] text-cyan-400 animate-pulse flex items-center gap-1 font-bold tracking-widest bg-cyan-950/30 px-2 py-0.5 rounded border border-cyan-400/30">
+            <div className="absolute -top-1 right-0 text-[10px] text-cyan-400 animate-pulse flex items-center gap-1 font-bold tracking-widest bg-cyan-950/30 px-2 py-0.5 rounded border border-cyan-400/30 backdrop-blur-sm shadow-[0_0_10px_rgba(34,211,238,0.2)]">
               <Cpu className="w-3 h-3" />
-              ENTANGLEMENT SYNERGY: x{(1 + (subSessions.filter(s => s.isActive).length * 0.3)).toFixed(1)}
+              ENTANGLEMENT SYNERGY: x{(1 + (subSessions.filter(s => s.isActive).length * 0.4)).toFixed(1)}
             </div>
           )}
           <div className="flex justify-between items-end">
@@ -929,6 +1007,31 @@ export default function App() {
               className={`h-full transition-all duration-300 ease-out ${realization >= 100 ? 'bg-white shadow-[0_0_10px_#fff]' : (isOverdrive ? 'bg-[#ff5500] shadow-[0_0_10px_#ff5500]' : 'bg-[#00ffcc] shadow-[0_0_10px_#00ffcc]')}`}
               style={{ width: `${Math.min(100, Math.max(0, realization))}%` }}
             />
+          </div>
+        </div>
+
+        {/* Resonance Meter */}
+        <div className="w-full flex flex-col gap-2 pb-2">
+          <div className="flex justify-between items-end">
+            <label className="text-xs text-cyan-400 capitalize tracking-widest flex items-center gap-2">
+              <Zap className={`w-3 h-3 ${resonance > 0.8 ? 'animate-pulse' : ''}`} /> 
+              Quantum Coherence / Resonance
+            </label>
+            <span className="text-[10px] font-mono text-cyan-400/70">
+              {(resonance * 100).toFixed(1)}% COH
+            </span>
+          </div>
+          <div className="w-full h-1 bg-black/50 rounded-full overflow-hidden flex gap-1">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div 
+                key={i}
+                className={`flex-1 h-full transition-all duration-500 ${
+                  resonance > i/20 
+                    ? (resonance > 0.8 ? 'bg-white shadow-[0_0_5px_#fff]' : 'bg-cyan-500') 
+                    : 'bg-cyan-950/30'
+                }`}
+              />
+            ))}
           </div>
         </div>
 
@@ -994,29 +1097,41 @@ export default function App() {
             <button
               onClick={summonAIAssistant}
               className="flex items-center gap-2 px-5 py-4 rounded font-bold uppercase transition-all duration-300 bg-[#00ffcc]/10 border border-[#00ffcc]/50 text-[#00ffcc] hover:bg-[#00ffcc]/20 hover:border-[#00ffcc] hover:shadow-[0_0_20px_rgba(0,255,204,0.3)]"
-              title="Summon AI-POWER-BOOSTER Sub-session"
+              title="Booster anclado a tu intención y targets de esta sesión"
             >
               <Sparkles className="w-5 h-5 flex-shrink-0" />
               <span className="hidden xl:inline">AI-POWER-BOOSTER</span>
             </button>
 
             <button
-              onClick={handleStart}
-              className={`flex items-center gap-2 px-8 py-4 rounded font-bold tracking-widest uppercase transition-all duration-300 ${
+              onMouseDown={startCharging}
+              onMouseUp={cancelCharging}
+              onMouseLeave={cancelCharging}
+              onTouchStart={startCharging}
+              onTouchEnd={cancelCharging}
+              className={`flex items-center gap-2 px-8 py-4 rounded font-bold tracking-widest uppercase transition-all duration-300 relative overflow-hidden group select-none ${
                 isActive 
                   ? 'bg-red-900/20 border border-red-500/50 text-red-400 hover:bg-red-900/40 shadow-[0_0_20px_rgba(239,68,68,0.2)]'
                   : 'bg-[#00ffcc]/10 border border-[#00ffcc]/50 text-[#00ffcc] hover:bg-[#00ffcc]/20 shadow-[0_0_20px_rgba(0,255,204,0.2)]'
               }`}
             >
+              <div className={`absolute inset-0 bg-[#00ffcc]/20 transition-transform duration-75 origin-left`} style={{ transform: `scaleX(${chargeProgress / 100})` }} />
+              <div className={`absolute inset-0 bg-white/5 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000`} />
+              
               {isActive ? (
                 <>
-                  <Square className="w-5 h-5" />
+                  <Square className={`w-5 h-5 ${isQuantumLocked ? 'animate-pulse' : ''}`} />
                   Stop Session
+                </>
+              ) : isCharging ? (
+                <>
+                  <Activity className="w-5 h-5 animate-spin" />
+                  Quantum Lock...
                 </>
               ) : (
                 <>
                   <Play className="w-5 h-5" />
-                  Start Session
+                  Hold to Start
                 </>
               )}
             </button>
