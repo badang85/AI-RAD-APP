@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, Upload, Activity, Clock, Plus, Trash2, TrendingUp, Zap, RotateCcw, FolderOpen, Save, X, Sparkles, Cpu } from 'lucide-react';
+import { Play, Square, Upload, Activity, Clock, Plus, Trash2, TrendingUp, Zap, RotateCcw, FolderOpen, Save, Check, X, Sparkles, Cpu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Import booster assets
@@ -94,6 +94,10 @@ export default function App() {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionNameInput, setSessionNameInput] = useState('');
+  /** When set, quick-save overwrites this slot (loaded or last saved-as). */
+  const [linkedSavedSessionId, setLinkedSavedSessionId] = useState<string | null>(null);
+  const [quickSaveSuccess, setQuickSaveSuccess] = useState(false);
+  const quickSaveSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -123,6 +127,9 @@ export default function App() {
         if (data.isOverdrive !== undefined) setIsOverdrive(data.isOverdrive);
         if (data.isQuantumAudio !== undefined) setIsQuantumAudio(data.isQuantumAudio);
         if (data.realization !== undefined) setRealization(data.realization);
+        const linked = (data as { linkedSavedSessionId?: string | null }).linkedSavedSessionId;
+        if (linked === null || linked === undefined) setLinkedSavedSessionId(null);
+        else if (typeof linked === 'string') setLinkedSavedSessionId(linked);
       }
       
       const savedRaw = localStorage.getItem('cyber_shaman_saved_sessions');
@@ -135,14 +142,35 @@ export default function App() {
 
   useEffect(() => {
     if (!isInitialized) return;
-    const sessionData = { witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization };
+    setLinkedSavedSessionId(prev => {
+      if (!prev) return prev;
+      return savedSessions.some(s => s.id === prev) ? prev : null;
+    });
+  }, [savedSessions, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    const sessionData = { witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, linkedSavedSessionId };
     localStorage.setItem('cyber_shaman_current', JSON.stringify(sessionData));
-  }, [witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, isInitialized]);
+  }, [witnesses, trends, frequency, duration, isOverdrive, isQuantumAudio, realization, linkedSavedSessionId, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('cyber_shaman_saved_sessions', JSON.stringify(savedSessions));
   }, [savedSessions, isInitialized]);
+
+  const flashQuickSaveSuccess = () => {
+    if (quickSaveSuccessTimerRef.current) clearTimeout(quickSaveSuccessTimerRef.current);
+    setQuickSaveSuccess(true);
+    quickSaveSuccessTimerRef.current = setTimeout(() => {
+      setQuickSaveSuccess(false);
+      quickSaveSuccessTimerRef.current = null;
+    }, 2000);
+  };
+
+  useEffect(() => () => {
+    if (quickSaveSuccessTimerRef.current) clearTimeout(quickSaveSuccessTimerRef.current);
+  }, []);
 
   const saveCurrentSession = () => {
     if (!sessionNameInput.trim()) return;
@@ -159,8 +187,35 @@ export default function App() {
       realization
     };
     setSavedSessions(prev => [newSession, ...prev]);
+    setLinkedSavedSessionId(newSession.id);
     setSessionNameInput('');
     setShowSessionModal(false);
+    flashQuickSaveSuccess();
+  };
+
+  const quickSaveSession = () => {
+    if (linkedSavedSessionId && savedSessions.some(s => s.id === linkedSavedSessionId)) {
+      setSavedSessions(prev =>
+        prev.map(s =>
+          s.id === linkedSavedSessionId
+            ? {
+                ...s,
+                timestamp: Date.now(),
+                witnesses,
+                trends,
+                frequency,
+                duration,
+                isOverdrive,
+                isQuantumAudio,
+                realization
+              }
+            : s
+        )
+      );
+      flashQuickSaveSuccess();
+      return;
+    }
+    setShowSessionModal(true);
   };
 
   const loadSession = (session: SavedSession) => {
@@ -176,11 +231,13 @@ export default function App() {
     setIsOverdrive(session.isOverdrive);
     setIsQuantumAudio(session.isQuantumAudio);
     setRealization(session.realization);
+    setLinkedSavedSessionId(session.id);
     setShowSessionModal(false);
   };
 
   const deleteSession = (id: string) => {
     setSavedSessions(prev => prev.filter(s => s.id !== id));
+    if (id === linkedSavedSessionId) setLinkedSavedSessionId(null);
   };
 
   useEffect(() => {
@@ -637,12 +694,37 @@ export default function App() {
           </h1>
           <p className="text-[#00ffcc]/60 text-sm mt-2 tracking-widest uppercase">Digital Psychotronic Board</p>
         </div>
-        <button 
-          onClick={() => setShowSessionModal(true)} 
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#00ffcc]/10 border border-[#00ffcc]/30 hover:border-[#00ffcc]/60 hover:bg-[#00ffcc]/20 rounded text-[#00ffcc] text-sm uppercase tracking-wider transition-colors"
-        >
-          <FolderOpen className="w-4 h-4" /> Manage Sessions
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={quickSaveSession}
+            aria-label={quickSaveSuccess ? 'Session saved' : 'Quick save session'}
+            title={
+              quickSaveSuccess
+                ? 'Saved'
+                : linkedSavedSessionId && savedSessions.some(s => s.id === linkedSavedSessionId)
+                  ? 'Quick save (overwrite linked session)'
+                  : 'Quick save — opens manager to name a new slot'
+            }
+            className={`p-2.5 rounded border transition-all duration-300 ${
+              quickSaveSuccess
+                ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]'
+                : 'bg-[#00ffcc]/10 border-[#00ffcc]/30 hover:border-[#00ffcc]/60 hover:bg-[#00ffcc]/20 text-[#00ffcc]'
+            }`}
+          >
+            {quickSaveSuccess ? (
+              <Check className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+            ) : (
+              <Save className="w-4 h-4" aria-hidden />
+            )}
+          </button>
+          <button 
+            onClick={() => setShowSessionModal(true)} 
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#00ffcc]/10 border border-[#00ffcc]/30 hover:border-[#00ffcc]/60 hover:bg-[#00ffcc]/20 rounded text-[#00ffcc] text-sm uppercase tracking-wider transition-colors"
+          >
+            <FolderOpen className="w-4 h-4" /> Manage Sessions
+          </button>
+        </div>
       </header>
 
       <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8">
