@@ -793,7 +793,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="flex flex-col gap-4 border border-[#00ffcc]/20 bg-black/50 p-6 rounded-lg shadow-[0_0_15px_rgba(0,255,204,0.05)] h-[600px] overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#00ffcc]/20 pb-2">
             <h2 className="text-xl tracking-widest uppercase">Targets (Witness)</h2>
@@ -844,20 +844,6 @@ export default function App() {
                 />
               </div>
             ))}
-          </div>
-        </section>
-
-        <section className={`flex flex-col items-center justify-center border transition-colors duration-1000 ${isOverdrive && isActive ? 'border-[#ff5500]/50 shadow-[0_0_50px_rgba(255,85,0,0.15)] bg-black/80' : 'border-[#00ffcc]/20 shadow-[0_0_30px_rgba(0,255,204,0.1)] bg-black/50'} p-6 rounded-lg relative overflow-hidden h-[600px]`}>
-          <div className={`absolute inset-0 pointer-events-none transition-all duration-1000 ${isOverdrive && isActive ? 'bg-[radial-gradient(circle_at_center,rgba(255,85,0,0.08)_0%,transparent_70%)]' : 'bg-[radial-gradient(circle_at_center,rgba(0,255,204,0.05)_0%,transparent_70%)]'}`} />
-          <h2 className={`text-xl text-center border-b pb-2 tracking-widest uppercase w-full mb-6 relative z-10 transition-colors ${isOverdrive && isActive ? 'border-[#ff5500]/50 text-[#ff5500]' : 'border-[#00ffcc]/20'}`}>Fusion Chamber</h2>
-          
-          <div className={`relative w-full aspect-square max-w-[300px] rounded-full border transition-colors duration-1000 ${isOverdrive && isActive ? 'border-[#ff5500]/50 shadow-[inset_0_0_80px_rgba(255,85,0,0.1)]' : 'border-[#00ffcc]/30 shadow-[inset_0_0_50px_rgba(0,255,204,0.05)]'} flex items-center justify-center bg-black z-10`}>
-            <canvas 
-              ref={canvasRef}
-              width={300}
-              height={300}
-              className="rounded-full"
-            />
           </div>
         </section>
 
@@ -914,65 +900,6 @@ export default function App() {
           </div>
         </section>
       </main>
-
-      {/* Sub-sessions Floating Windows */}
-      <AnimatePresence>
-        {subSessions.map(sub => (
-          <motion.div
-            key={sub.id}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            drag
-            dragMomentum={false}
-            className="fixed z-40 w-64 bg-black/95 border border-[#00ffcc]/40 rounded-lg shadow-[0_0_30px_rgba(0,255,204,0.3)] overflow-hidden cursor-move backdrop-blur-md"
-            style={{ left: sub.x, top: sub.y }}
-          >
-            <div className="bg-[#00ffcc]/10 p-2 flex items-center justify-between border-b border-[#00ffcc]/20">
-              <div className="flex items-center gap-2">
-                <Cpu className="w-3 h-3 text-[#00ffcc]" />
-                <span className="text-[10px] uppercase tracking-tighter font-bold">{sub.title}</span>
-              </div>
-              <button onClick={() => removeSubSession(sub.id)} className="text-[#00ffcc]/50 hover:text-red-400">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-3 flex flex-col gap-2">
-              <div className="relative h-28 bg-black/60 rounded overflow-hidden border border-[#00ffcc]/30 shadow-[inset_0_0_15px_rgba(0,255,204,0.3)]">
-                <QuantumSigilCanvas
-                  seed={(sub.sigilSeed ^ sessionIntentHash) >>> 0}
-                  frequency={frequency}
-                  realization={sub.realization}
-                  sessionActive={isActive}
-                  isQuantumAudio={isQuantumAudio}
-                />
-                <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 to-transparent pt-4 pb-1 px-2">
-                  <span className="text-[8px] uppercase tracking-[0.2em] text-[#00ffcc]/90 font-semibold">Sigilo vivo</span>
-                  <span className="block text-[7px] text-[#00ffcc]/50 font-mono mt-0.5">
-                    {frequency} Hz{isQuantumAudio ? ' · quantum' : ''}
-                  </span>
-                </div>
-              </div>
-              <div className="text-[10px] uppercase tracking-wide text-[#00ffcc]/80 space-y-0.5">
-                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Target:</span> <span className="text-[#00ffcc] font-bold">{sub.witness}</span></div>
-                <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Boost:</span> <span className="text-cyan-400 font-bold">{sub.trend}</span></div>
-              </div>
-              <div className="mt-2 flex flex-col gap-1">
-                <div className="flex justify-between text-[8px] text-[#00ffcc]/50 uppercase">
-                  <span>Booster Resonance</span>
-                  <span>{sub.realization.toFixed(1)}%</span>
-                </div>
-                <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-[#00ffcc]/20">
-                  <div 
-                    className="h-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] transition-all duration-300"
-                    style={{ width: `${sub.realization}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
 
       <footer className="w-full max-w-6xl mt-8 border border-[#00ffcc]/20 bg-black/50 p-6 rounded-lg flex flex-col gap-6">
         
@@ -1144,6 +1071,112 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <section className="w-full max-w-6xl mt-8 border border-[#00ffcc]/20 bg-black/50 p-6 rounded-lg shadow-[0_0_25px_rgba(0,255,204,0.08)] flex flex-col gap-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 border-b border-[#00ffcc]/20 pb-4">
+          <div>
+            <h2 className="text-2xl tracking-[0.18em] uppercase text-[#00ffcc]">Manifestation Deck</h2>
+            <p className="text-xs text-[#00ffcc]/55 uppercase tracking-[0.25em] mt-2">Fusion chamber and session boosts</p>
+          </div>
+          <div className="text-xs uppercase tracking-[0.2em] text-[#00ffcc]/60">
+            {subSessions.length > 0 ? `${subSessions.length} boosts linked` : 'No boosts active'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] gap-6 items-start">
+          <section className={`flex flex-col items-center justify-center border transition-colors duration-1000 ${isOverdrive && isActive ? 'border-[#ff5500]/50 shadow-[0_0_50px_rgba(255,85,0,0.15)] bg-black/80' : 'border-[#00ffcc]/20 shadow-[0_0_30px_rgba(0,255,204,0.1)] bg-black/50'} p-6 rounded-lg relative overflow-hidden min-h-[520px]`}>
+            <div className={`absolute inset-0 pointer-events-none transition-all duration-1000 ${isOverdrive && isActive ? 'bg-[radial-gradient(circle_at_center,rgba(255,85,0,0.08)_0%,transparent_70%)]' : 'bg-[radial-gradient(circle_at_center,rgba(0,255,204,0.05)_0%,transparent_70%)]'}`} />
+            <h3 className={`text-xl text-center border-b pb-2 tracking-widest uppercase w-full mb-6 relative z-10 transition-colors ${isOverdrive && isActive ? 'border-[#ff5500]/50 text-[#ff5500]' : 'border-[#00ffcc]/20'}`}>Fusion Chamber</h3>
+            
+            <div className={`relative w-full aspect-square max-w-[340px] rounded-full border transition-colors duration-1000 ${isOverdrive && isActive ? 'border-[#ff5500]/50 shadow-[inset_0_0_80px_rgba(255,85,0,0.1)]' : 'border-[#00ffcc]/30 shadow-[inset_0_0_50px_rgba(0,255,204,0.05)]'} flex items-center justify-center bg-black z-10`}>
+              <canvas 
+                ref={canvasRef}
+                width={300}
+                height={300}
+                className="rounded-full w-full h-full"
+              />
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-4 min-h-[520px]">
+            <div className="flex items-center justify-between border border-[#00ffcc]/20 bg-black/40 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-cyan-400" />
+                <h3 className="text-sm tracking-[0.2em] uppercase text-[#00ffcc]">Boost Field</h3>
+              </div>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-400/80">
+                {subSessions.filter(s => s.isActive).length} active
+              </span>
+            </div>
+
+            {subSessions.length === 0 ? (
+              <div className="flex-1 border border-dashed border-[#00ffcc]/20 rounded-lg bg-black/30 flex items-center justify-center text-center px-6">
+                <div className="max-w-xs">
+                  <p className="text-sm uppercase tracking-[0.25em] text-[#00ffcc]/70">No boosters summoned</p>
+                  <p className="text-xs text-[#00ffcc]/45 mt-3 leading-relaxed">Use the AI-POWER-BOOSTER control above to create support modules tied to this manifestation.</p>
+                </div>
+              </div>
+            ) : (
+              <AnimatePresence>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4">
+                  {subSessions.map(sub => (
+                    <motion.div
+                      key={sub.id}
+                      initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -18, scale: 0.98 }}
+                      className="bg-black/95 border border-[#00ffcc]/40 rounded-lg shadow-[0_0_30px_rgba(0,255,204,0.16)] overflow-hidden backdrop-blur-md"
+                    >
+                      <div className="bg-[#00ffcc]/10 p-2 flex items-center justify-between border-b border-[#00ffcc]/20">
+                        <div className="flex items-center gap-2">
+                          <Cpu className="w-3 h-3 text-[#00ffcc]" />
+                          <span className="text-[10px] uppercase tracking-tighter font-bold">{sub.title}</span>
+                        </div>
+                        <button onClick={() => removeSubSession(sub.id)} className="text-[#00ffcc]/50 hover:text-red-400">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="p-3 flex flex-col gap-2">
+                        <div className="relative h-28 bg-black/60 rounded overflow-hidden border border-[#00ffcc]/30 shadow-[inset_0_0_15px_rgba(0,255,204,0.3)]">
+                          <QuantumSigilCanvas
+                            seed={(sub.sigilSeed ^ sessionIntentHash) >>> 0}
+                            frequency={frequency}
+                            realization={sub.realization}
+                            sessionActive={isActive}
+                            isQuantumAudio={isQuantumAudio}
+                          />
+                          <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 to-transparent pt-4 pb-1 px-2">
+                            <span className="text-[8px] uppercase tracking-[0.2em] text-[#00ffcc]/90 font-semibold">Sigilo vivo</span>
+                            <span className="block text-[7px] text-[#00ffcc]/50 font-mono mt-0.5">
+                              {frequency} Hz{isQuantumAudio ? ' · quantum' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wide text-[#00ffcc]/80 space-y-0.5">
+                          <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Target:</span> <span className="text-[#00ffcc] font-bold">{sub.witness}</span></div>
+                          <div className="flex justify-between border-b border-[#00ffcc]/10 pb-0.5"><span>Boost:</span> <span className="text-cyan-400 font-bold">{sub.trend}</span></div>
+                        </div>
+                        <div className="mt-2 flex flex-col gap-1">
+                          <div className="flex justify-between text-[8px] text-[#00ffcc]/50 uppercase">
+                            <span>Booster Resonance</span>
+                            <span>{sub.realization.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-[#00ffcc]/20">
+                            <div 
+                              className="h-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] transition-all duration-300"
+                              style={{ width: `${sub.realization}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </AnimatePresence>
+            )}
+          </section>
+        </div>
+      </section>
     </div>
   );
 }
