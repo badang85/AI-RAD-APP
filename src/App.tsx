@@ -245,6 +245,15 @@ const getPhaseFromProgress = (progress: number): EmissionPhase => {
   return 'seal';
 };
 
+const formatEta = (minutes: number) => {
+  if (!Number.isFinite(minutes) || minutes <= 0) return 'imminent';
+  if (minutes < 1) return `${Math.ceil(minutes * 60)} sec`;
+  if (minutes < 60) return `${Math.ceil(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = Math.ceil(minutes % 60);
+  return `${hours}h ${remainingMinutes}m`;
+};
+
 export default function App() {
   const [isCurrentLoaded, setIsCurrentLoaded] = useState(false);
   const [isSavedSessionsLoaded, setIsSavedSessionsLoaded] = useState(false);
@@ -336,6 +345,43 @@ export default function App() {
     if (coherenceProfile.sessionCoherence > 0.52) return 'Forming';
     return 'Diffuse';
   }, [activeBoosters.length, coherenceProfile.sessionCoherence]);
+
+  const operationStrength = useMemo(() => {
+    return clamp(
+      coherenceProfile.sessionCoherence * 0.34 +
+        resonance * 0.28 +
+        totalProgress * 0.18 +
+        activeBoosters.length * 0.05 +
+        (isActive ? 0.12 : 0)
+    );
+  }, [activeBoosters.length, coherenceProfile.sessionCoherence, isActive, resonance, totalProgress]);
+
+  const estimatedRatePerMinute = useMemo(() => {
+    if (!isActive) return 0;
+    return (
+      coherenceProfile.sessionCoherence * 1.8 +
+      resonance * 2.4 +
+      activeBoosters.length * 0.7 +
+      phaseMeta[sessionPhase].multiplier * 1.2 +
+      (isOverdrive ? 0.8 : 0.2)
+    );
+  }, [activeBoosters.length, coherenceProfile.sessionCoherence, isActive, isOverdrive, resonance, sessionPhase]);
+
+  const resultEtaLabel = useMemo(() => {
+    if (realization >= 100) return 'result locked';
+    if (!isActive) return 'waiting start';
+    if (estimatedRatePerMinute <= 0.05) return 'undetected';
+    return formatEta((100 - realization) / estimatedRatePerMinute);
+  }, [estimatedRatePerMinute, isActive, realization]);
+
+  const operationStateLabel = useMemo(() => {
+    if (realization >= 100) return 'Result Locked';
+    if (!isActive && operationStrength > 0.55) return 'Field Primed';
+    if (!isActive) return 'Standby';
+    if (operationStrength > 0.72) return 'Operation Running';
+    if (operationStrength > 0.48) return 'Operation Forming';
+    return 'Weak Detection';
+  }, [isActive, operationStrength, realization]);
 
   useEffect(() => {
     try {
@@ -909,7 +955,7 @@ export default function App() {
   if (!isCurrentLoaded || !isSavedSessionsLoaded) return null;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#00ffcc] font-mono p-4 md:p-8 flex flex-col items-center">
+    <div className="min-h-screen bg-[#050505] text-[#00ffcc] font-mono p-4 pt-[12.5rem] md:p-8 md:pt-[12.5rem] flex flex-col items-center">
       {showSessionModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#050505] border border-[#00ffcc]/30 rounded-lg shadow-[0_0_30px_rgba(0,255,204,0.1)] w-full max-w-lg overflow-hidden flex flex-col">
@@ -977,6 +1023,65 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <section className="fixed top-0 left-0 right-0 z-40 px-4 pt-4 md:px-8">
+        <div className="max-w-6xl mx-auto border border-cyan-300/25 bg-[#03110f]/90 backdrop-blur-xl rounded-2xl shadow-[0_0_40px_rgba(0,255,204,0.12)] overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,0.55fr))] gap-px bg-[#0b2924]">
+            <div className="bg-[#03110f] px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`px-3 py-1 rounded-full border text-[10px] uppercase tracking-[0.24em] ${realization >= 100 ? 'border-white/40 bg-white/10 text-white' : isActive ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300' : 'border-[#00ffcc]/20 bg-[#00ffcc]/8 text-[#00ffcc]/70'}`}>
+                  {operationStateLabel}
+                </span>
+                <span className="px-3 py-1 rounded-full border border-cyan-400/20 bg-cyan-500/8 text-cyan-300 text-[10px] uppercase tracking-[0.24em]">
+                  {phaseMeta[sessionPhase].label}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.26em] text-[#00ffcc]/55">Psychotronic operation detection</div>
+                  <div className="text-2xl md:text-3xl text-[#e6fffd] mt-2">{realization.toFixed(1)}% result</div>
+                </div>
+                <div className="text-sm text-[#00ffcc]/72 max-w-xl leading-relaxed">
+                  {isActive
+                    ? operationStrength > 0.68
+                      ? 'The app detects a coherent active operation and is tracking the path toward result lock.'
+                      : 'The operation is running, but the field still looks partial or unstable.'
+                    : realization >= 100
+                      ? 'The chamber marks the session as completed and sealed.'
+                      : 'The field is not currently transmitting. Start the session to measure active operation.'}
+                </div>
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-[#041f1b] border border-[#00ffcc]/12 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-cyan-400 via-[#00ffcc] to-white shadow-[0_0_14px_rgba(217,255,251,0.4)] transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, realization))}%` }} />
+              </div>
+            </div>
+
+            <div className="bg-[#03110f] px-4 py-4">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-[#00ffcc]/55">ETA</div>
+              <div className="text-xl text-[#dffef9] mt-2">{resultEtaLabel}</div>
+              <div className="text-[11px] text-[#00ffcc]/42 mt-2">Estimated time to result</div>
+            </div>
+
+            <div className="bg-[#03110f] px-4 py-4">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-[#00ffcc]/55">Operation</div>
+              <div className="text-xl text-[#dffef9] mt-2">{(operationStrength * 100).toFixed(0)}%</div>
+              <div className="text-[11px] text-[#00ffcc]/42 mt-2">Detected execution strength</div>
+            </div>
+
+            <div className="bg-[#03110f] px-4 py-4">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-[#00ffcc]/55">Remaining</div>
+              <div className="text-xl text-[#dffef9] mt-2">{Math.max(0, 100 - realization).toFixed(1)}%</div>
+              <div className="text-[11px] text-[#00ffcc]/42 mt-2">Distance to lock</div>
+            </div>
+
+            <div className="bg-[#03110f] px-4 py-4">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-[#00ffcc]/55">Coherence</div>
+              <div className="text-xl text-[#dffef9] mt-2">{(coherenceProfile.sessionCoherence * 100).toFixed(0)}%</div>
+              <div className="text-[11px] text-[#00ffcc]/42 mt-2">Field quality right now</div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <header className="w-full max-w-6xl mb-6 flex flex-col lg:flex-row items-start lg:items-center justify-between border-b border-[#00ffcc]/20 pb-6 gap-4">
         <div className="space-y-3">
